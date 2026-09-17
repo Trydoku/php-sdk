@@ -1,0 +1,16 @@
+{
+    "$schema": "https://raw.githubusercontent.com/infection/infection/0.29.0/resources/schema.json",
+    "source": {
+        "directories": ["src/Trydoku"]
+    },
+    "logs": {
+        "text": "infection.log"
+    },
+    "mutators": {
+        "@default": true
+    },
+    "minMsi": 80,
+    "minCoveredMsi": 90,
+    "testFramework": "phpunit",
+    "testFrameworkOptions": "--testsuite=unit"
+}

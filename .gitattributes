@@ -1,0 +1,10 @@
+# Auto-detect text files and normalize to LF in the repository.
+* text=auto eol=lf
+
+# Exclude development files from dist archives.
+/.github export-ignore
+/.gitignore export-ignore
+/.php-cs-fixer.dist.php export-ignore
+/infection.json5 export-ignore
+/phpunit.xml export-ignore
+/tests export-ignore

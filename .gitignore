@@ -1,0 +1,9 @@
+/vendor/
+/composer.lock
+/.phpunit.cache/
+/infection.log
+/.php-cs-fixer.cache
+/.idea/
+*.swp
+*.swo
+.DS_Store
