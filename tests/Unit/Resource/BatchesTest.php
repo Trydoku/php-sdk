@@ -33,7 +33,7 @@ final class BatchesTest extends TestCase
 
     private function completedBatchJson(): string
     {
-        return json_encode([
+        return $this->encodeJson([
             'data' => [
                 'id' => 'batch-123',
                 'status' => 'completed',
@@ -106,13 +106,11 @@ final class BatchesTest extends TestCase
                 $batches->get($id);
                 $this->fail('Expected invalid ID.');
             } catch (\InvalidArgumentException) {
-                $this->assertTrue(true);
             }
             try {
                 $batches->downloadZip($id);
                 $this->fail('Expected invalid ID.');
             } catch (\InvalidArgumentException) {
-                $this->assertTrue(true);
             }
         }
     }
@@ -132,7 +130,7 @@ final class BatchesTest extends TestCase
 
     public function testDownloadZipThrowsBatchNotReady(): void
     {
-        $body = json_encode([
+        $body = $this->encodeJson([
             'error' => ['code' => 'BATCH_NOT_READY', 'message' => 'Batch processing is not complete.', 'details' => ''],
             'message' => 'Batch processing is not complete.',
         ]);
@@ -163,7 +161,7 @@ final class BatchesTest extends TestCase
 
     public function testWaitForCompletionPollsMultipleTimes(): void
     {
-        $processingJson = json_encode([
+        $processingJson = $this->encodeJson([
             'data' => [
                 'id' => 'batch-123',
                 'status' => 'processing',
@@ -194,7 +192,7 @@ final class BatchesTest extends TestCase
 
     public function testWaitForCompletionTimesOut(): void
     {
-        $processingJson = json_encode([
+        $processingJson = $this->encodeJson([
             'data' => [
                 'id' => 'batch-123',
                 'status' => 'processing',
@@ -222,7 +220,7 @@ final class BatchesTest extends TestCase
 
     public function testWaitForCompletionReturnsOnFailedItems(): void
     {
-        $failedJson = json_encode([
+        $failedJson = $this->encodeJson([
             'data' => [
                 'id' => 'batch-fail',
                 'status' => 'completed',
@@ -255,7 +253,7 @@ final class BatchesTest extends TestCase
         $mockHttp = $this->createMock(ClientInterface::class);
         $mockHttp->expects($this->exactly(2))->method('sendRequest')
             ->willReturnOnConsecutiveCalls(
-                new Response(200, [], json_encode($processing)),
+                new Response(200, [], $this->encodeJson($processing)),
                 new Response(200, [], $this->completedBatchJson()),
             );
 
@@ -272,7 +270,7 @@ final class BatchesTest extends TestCase
             $response['data']['setup_status'] = $setupStatus;
             $mockHttp = $this->createMock(ClientInterface::class);
             $mockHttp->expects($this->once())->method('sendRequest')
-                ->willReturn(new Response(200, [], json_encode($response)));
+                ->willReturn(new Response(200, [], $this->encodeJson($response)));
 
             $batch = $this->createBatchesResource($mockHttp)->waitForCompletion('batch-123', intervalMs: 0);
 
@@ -324,7 +322,7 @@ final class BatchesTest extends TestCase
         $mockHttp = $this->createMock(ClientInterface::class);
         $mockHttp->expects($this->exactly(2))->method('sendRequest')
             ->willReturnOnConsecutiveCalls(
-                new Response(202, [], json_encode($pending)),
+                new Response(202, [], $this->encodeJson($pending)),
                 new Response(200, [], $this->completedBatchJson()),
             );
 
@@ -346,4 +344,8 @@ final class BatchesTest extends TestCase
         $batches->get('batch-123');
     }
 
+    private function encodeJson(mixed $value): string
+    {
+        return json_encode($value, JSON_THROW_ON_ERROR);
+    }
 }

@@ -94,7 +94,6 @@ final class GenerateRequestTest extends TestCase
         $export['data'][0]['nested']['Name'] = 'Export mutation';
 
         $this->assertSame('Before', $original->toArray()['data'][0]['nested']['Name']);
-        $this->assertSame('Before', $original->toArray()['data'][0]['nested']['Name']);
         $this->assertSame([['Other' => 'value']], $next->toArray()['data']);
     }
 
@@ -105,11 +104,14 @@ final class GenerateRequestTest extends TestCase
                 GenerateRequest::create()->withData([['value' => $object]]);
                 $this->fail('Expected object to be rejected.');
             } catch (\InvalidArgumentException) {
-                $this->assertTrue(true);
             }
         }
 
         $resource = fopen('php://memory', 'r');
+        if (!is_resource($resource)) {
+            self::fail('Could not open an in-memory stream.');
+        }
+
         try {
             $this->expectException(\InvalidArgumentException::class);
             GenerateRequest::create()->withData([['value' => $resource]]);

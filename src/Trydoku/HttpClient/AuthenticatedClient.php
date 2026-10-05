@@ -56,7 +56,10 @@ final class AuthenticatedClient
         return $this->requestWithContext($method, $uri, $body, $headers)->data;
     }
 
-    /** @param array<string, mixed>|null $body @param array<string, string> $headers */
+    /**
+     * @param array<string, mixed>|null $body
+     * @param array<string, string> $headers
+     */
     public function requestWithContext(string $method, string $uri, ?array $body = null, array $headers = []): ResponseContext
     {
         $response = $this->sendRequest($method, $uri, $body, $headers);

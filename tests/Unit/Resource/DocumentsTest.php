@@ -35,7 +35,7 @@ final class DocumentsTest extends TestCase
 
     public function testGenerateWithTemplateUuid(): void
     {
-        $responseBody = json_encode([
+        $responseBody = $this->encodeJson([
             'data' => [
                 'id' => 'batch-abc',
                 'status' => 'processing',
@@ -70,7 +70,7 @@ final class DocumentsTest extends TestCase
 
     public function testGenerateWithBase64Template(): void
     {
-        $responseBody = json_encode([
+        $responseBody = $this->encodeJson([
             'data' => [
                 'id' => 'batch-xyz',
                 'status' => 'processing',
@@ -97,7 +97,7 @@ final class DocumentsTest extends TestCase
 
     public function testGenerateWithVariableMapping(): void
     {
-        $responseBody = json_encode([
+        $responseBody = $this->encodeJson([
             'data' => [
                 'id' => 'batch-map',
                 'status' => 'processing',
@@ -167,7 +167,6 @@ final class DocumentsTest extends TestCase
                 $documents->generate(templateUuid: 'uuid', data: $rows);
                 $this->fail('Expected invalid row count.');
             } catch (\InvalidArgumentException) {
-                $this->assertTrue(true);
             }
 
             $request = GenerateRequest::create()->withTemplateBase64('encoded')->withData($rows);
@@ -175,7 +174,6 @@ final class DocumentsTest extends TestCase
                 $documents->generateFromRequest($request);
                 $this->fail('Expected invalid row count.');
             } catch (\InvalidArgumentException) {
-                $this->assertTrue(true);
             }
         }
     }
@@ -199,7 +197,7 @@ final class DocumentsTest extends TestCase
 
     public function testIdempotencyKeyIsSentAsHeader(): void
     {
-        $responseBody = json_encode([
+        $responseBody = $this->encodeJson([
             'data' => [
                 'id' => 'batch-idemp',
                 'status' => 'processing',
@@ -263,7 +261,7 @@ final class DocumentsTest extends TestCase
 
     public function testSetupPendingResponseIsExposedOnBatch(): void
     {
-        $responseBody = json_encode([
+        $responseBody = $this->encodeJson([
             'data' => [
                 'id' => 'batch-pending',
                 'status' => 'processing',
@@ -299,4 +297,8 @@ final class DocumentsTest extends TestCase
         $documents->generate(templateUuid: 'uuid', data: [['Name' => 'Test']]);
     }
 
+    private function encodeJson(mixed $value): string
+    {
+        return json_encode($value, JSON_THROW_ON_ERROR);
+    }
 }

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-05
+
+### Added
+- PHPStan level 8 (`composer analyse`) and PHP_CodeSniffer PSR-12 (`composer cs`) with CI checks
+
+### Fixed
+- Snapshot request builder arrays and reject objects/resources; validate generation row limits and batch IDs locally; validate batch item lists and absolute timestamps; preserve HTTP response context for batch schema errors; distinguish 409 batch-file errors from idempotency conflicts; clarify optional Composer discovery plugin setup
+
+### Changed
+- **Migration:** Existing requests with object/resource values or more than 128 nested array levels now fail locally. Batch generation now rejects 0 or more than 500 rows before transport; malformed item lists/timestamps and empty/dot batch IDs are rejected. Catch `TrydokuException` for general API handling: `ConflictException` now represents `IDEMPOTENCY_IN_PROGRESS` only, `BATCH_FILES_MISSING` uses `BatchFilesMissingException`, and other 409 responses use `ApiException`.
+- Snapshot request builder arrays and reject objects/resources to keep payloads stable after construction
+
+## [1.0.0] - 2026-09-17
+
 ### Added
 - Initial release of the TRYDOKU PHP SDK
 - `Client` class as the main entry point
@@ -24,7 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI, `SECURITY.md`, and `.gitattributes` export rules
 
 ### Fixed
-- Snapshot request builder arrays and reject objects/resources; validate generation row limits and batch IDs locally; validate batch item lists and absolute timestamps; preserve HTTP response context for batch schema errors; distinguish 409 batch-file errors from idempotency conflicts; clarify optional Composer discovery plugin setup
 - Continue polling after individual row failures until the batch finishes or reports a terminal failure
 - Validate polling arguments and encode batch IDs as URL path segments
 - Reject conflicting template sources in `Documents::generate()`
@@ -35,8 +48,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Correct PHPDoc, dependency claims, and exception handling documentation
 
 ### Changed
-- **Migration:** Existing requests with object/resource values or more than 128 nested array levels now fail locally. Batch generation now rejects 0 or more than 500 rows before transport; malformed item lists/timestamps and empty/dot batch IDs are rejected. Catch `TrydokuException` for general API handling: `ConflictException` now represents `IDEMPOTENCY_IN_PROGRESS` only, `BATCH_FILES_MISSING` uses `BatchFilesMissingException`, and other 409 responses use `ApiException`.
-- Snapshot request builder arrays and reject objects/resources to keep payloads stable after construction
 - Remove the unused `Config::timeout` option; configure timeouts on the supplied HTTP client
 - Add a shared code style configuration and Composer test, lint, and format commands
 - Rewrite the README for open-source readers and clarify PHPDoc across the public API

@@ -40,9 +40,12 @@ final class GenerateFlowTest extends TestCase
 
     public function testGenerateAndPollAndDownload(): void
     {
+        $client = $this->client ?? throw new \LogicException('The integration client was not initialized.');
+        $templateUuid = $this->templateUuid ?? throw new \LogicException('The template UUID was not initialized.');
+
         // 1. Generate documents
-        $batch = $this->client->documents()->generate(
-            templateUuid: $this->templateUuid,
+        $batch = $client->documents()->generate(
+            templateUuid: $templateUuid,
             data: [
                 ['Client_Name' => 'Integration Test Corp', 'Invoice_Number' => 'INT-001'],
             ],
@@ -53,7 +56,7 @@ final class GenerateFlowTest extends TestCase
         $this->assertSame(1, $batch->totalItems);
 
         // 2. Wait for completion
-        $completedBatch = $this->client->batches()->waitForCompletion(
+        $completedBatch = $client->batches()->waitForCompletion(
             $batch->id,
             maxAttempts: 60,
             intervalMs: 2000,
@@ -65,7 +68,7 @@ final class GenerateFlowTest extends TestCase
         $this->assertNotNull($completedBatch->links->zip);
 
         // 3. Download ZIP
-        $zipContent = $this->client->batches()->downloadZip($batch->id);
+        $zipContent = $client->batches()->downloadZip($batch->id);
 
         $this->assertNotEmpty($zipContent);
         // ZIP files begin with the PK signature

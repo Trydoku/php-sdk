@@ -25,6 +25,7 @@ final class Batches
      * Fetch the current status, counters, links, and items for a batch.
      *
      * @throws TrydokuException If the API returns an error
+     * @throws \InvalidArgumentException If the batch ID is empty or a dot path segment
      */
     public function get(string $batchId): Batch
     {
@@ -43,6 +44,7 @@ final class Batches
      *
      * @throws \Trydoku\Exception\BatchNotReadyException If the batch is still processing
      * @throws TrydokuException If the API returns another error
+     * @throws \InvalidArgumentException If the batch ID is empty or a dot path segment
      */
     public function downloadZip(string $batchId): string
     {

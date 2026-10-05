@@ -79,7 +79,7 @@ final class GenerateRequest
     public function withData(array $data): self
     {
         $clone = clone $this;
-        $clone->data = self::snapshot($data);
+        $clone->data = array_values(self::snapshot($data));
 
         return $clone;
     }

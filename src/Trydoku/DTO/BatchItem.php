@@ -25,7 +25,7 @@ final class BatchItem
     public static function fromArray(array $data): self
     {
         $rowIndex = $data['row_index'] ?? null;
-        if (!is_numeric($rowIndex) || is_bool($rowIndex)) {
+        if (!is_numeric($rowIndex)) {
             throw new \InvalidArgumentException('The batch item is missing a valid "row_index" field.');
         }
 

@@ -30,7 +30,9 @@
         "phpunit/phpunit": "^11.0",
         "infection/infection": "^0.29",
         "php-cs-fixer/shim": "^3.0",
-        "php-http/mock-client": "^1.6"
+        "php-http/mock-client": "^1.6",
+        "phpstan/phpstan": "^2.2",
+        "squizlabs/php_codesniffer": "^4.0"
     },
     "suggest": {
         "guzzlehttp/guzzle": "PSR-18 HTTP client for Laravel and standalone PHP projects (^7.0)",
@@ -50,7 +52,9 @@
     "scripts": {
         "test": "phpunit --testsuite unit",
         "lint": "php-cs-fixer fix --dry-run --diff",
-        "format": "php-cs-fixer fix"
+        "format": "php-cs-fixer fix",
+        "analyse": "phpstan analyse",
+        "cs": "phpcs --warning-severity=0"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,

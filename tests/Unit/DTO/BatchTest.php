@@ -11,6 +11,7 @@ use Trydoku\DTO\BatchLinks;
 
 final class BatchTest extends TestCase
 {
+    /** @return array<string, mixed> */
     private function sampleBatchArray(): array
     {
         return [
@@ -75,12 +76,7 @@ final class BatchTest extends TestCase
         foreach (['broken', 42, false, null, ['named' => []], [2 => []]] as $items) {
             $data = $this->sampleBatchArray();
             $data['items'] = $items;
-            try {
-                Batch::fromArray($data);
-                $this->fail('Invalid items payload was accepted.');
-            } catch (\InvalidArgumentException) {
-                $this->assertTrue(true);
-            }
+            $this->assertThrowsInvalidArgument(static fn () => Batch::fromArray($data));
         }
     }
 
@@ -89,12 +85,7 @@ final class BatchTest extends TestCase
         foreach (['2026-02-31T00:00:00Z', 'tomorrow', '2026-10-04T12:00:00', '2026-01-01T24:00:00Z'] as $timestamp) {
             $data = $this->sampleBatchArray();
             $data['created_at'] = $timestamp;
-            try {
-                Batch::fromArray($data);
-                $this->fail('Invalid timestamp was accepted.');
-            } catch (\InvalidArgumentException) {
-                $this->assertTrue(true);
-            }
+            $this->assertThrowsInvalidArgument(static fn () => Batch::fromArray($data));
         }
     }
 
@@ -219,5 +210,18 @@ final class BatchTest extends TestCase
         $this->expectExceptionMessage('"links"');
 
         Batch::fromArray($data);
+    }
+
+    private function assertThrowsInvalidArgument(callable $operation): void
+    {
+        try {
+            $operation();
+        } catch (\InvalidArgumentException) {
+            $this->addToAssertionCount(1);
+
+            return;
+        }
+
+        self::fail('Expected an InvalidArgumentException.');
     }
 }

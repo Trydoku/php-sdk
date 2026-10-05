@@ -59,8 +59,8 @@ final class Batch
                 message: $exception->getMessage(),
                 previous: $exception,
                 httpStatusCode: $context?->httpStatusCode,
-                responseBody: $context?->responseBody ?? (is_string($encoded) ? $encoded : null),
-                responseBodyTruncated: $context?->responseBodyTruncated ?? false,
+                responseBody: $context->responseBody ?? (is_string($encoded) ? $encoded : null),
+                responseBodyTruncated: $context->responseBodyTruncated ?? false,
             );
         }
     }
@@ -175,7 +175,7 @@ final class Batch
     private static function requireInt(array $data, string $key): int
     {
         $value = $data[$key] ?? null;
-        if (!is_numeric($value) || is_bool($value)) {
+        if (!is_numeric($value)) {
             throw new \InvalidArgumentException("The batch payload is missing a valid \"{$key}\" field.");
         }
 
@@ -193,12 +193,14 @@ final class Batch
         }
 
         $pattern = '/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/D';
-        if (preg_match($pattern, $value, $matches) !== 1
-            || ((int) substr($matches[4], 1, 2) === 14 && substr($matches[4], 4, 2) !== '00')) {
+        if (
+            preg_match($pattern, $value, $matches) !== 1
+            || ((int) substr($matches[4], 1, 2) === 14 && substr($matches[4], 4, 2) !== '00')
+        ) {
             throw new \InvalidArgumentException("The batch payload has an invalid \"{$key}\" field.");
         }
 
-        $fraction = str_pad($matches[3] ?? '', 6, '0');
+        $fraction = str_pad($matches[3], 6, '0');
         $zone = $matches[4] === 'Z' ? '+00:00' : $matches[4];
         $date = \DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i:s.uP', $matches[1] . 'T' . $matches[2] . '.' . $fraction . $zone);
         $errors = \DateTimeImmutable::getLastErrors();
