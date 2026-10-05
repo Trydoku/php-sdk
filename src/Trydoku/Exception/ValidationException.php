@@ -22,8 +22,9 @@ class ValidationException extends TrydokuException
         ?int $httpStatusCode = null,
         ?string $responseBody = null,
         public readonly array $errors = [],
+        ?string $errorCode = null,
     ) {
-        parent::__construct($message, $code, $previous, $httpStatusCode, $responseBody);
+        parent::__construct($message, $code, $previous, $httpStatusCode, $responseBody, $errorCode);
     }
 
     /**

@@ -66,6 +66,57 @@ final class BatchesTest extends TestCase
         $this->assertNotNull($batch->links->zip);
     }
 
+    public function testGetRejectsJsonObjectForItemsAndPreservesHttpContext(): void
+    {
+        $body = '{ "data": {"id":"batch-123", "status":"completed", "setup_status":"ready", "total_items":0, "processed_items":0, "failed_items":0, "created_at":null, "updated_at":null, "links":{"self":"x","zip":null}, "items":{} } }';
+        $mock = $this->createMock(ClientInterface::class);
+        $mock->method('sendRequest')->willReturn(new Response(202, [], $body));
+        try {
+            $this->createBatchesResource($mock)->get('batch-123');
+            $this->fail('Expected invalid items schema.');
+        } catch (ApiException $exception) {
+            $this->assertSame(202, $exception->httpStatusCode);
+            $this->assertSame($body, $exception->responseBody);
+            $this->assertInstanceOf(\InvalidArgumentException::class, $exception->getPrevious());
+        }
+    }
+
+    public function testSchemaErrorTruncatesOversizedDiagnosticBodyWithFlag(): void
+    {
+        $body = str_repeat(' ', 65540) . '{"data":{"id":"batch-123"}}';
+        $mock = $this->createMock(ClientInterface::class);
+        $mock->method('sendRequest')->willReturn(new Response(201, [], $body));
+        try {
+            $this->createBatchesResource($mock)->get('batch-123');
+            $this->fail('Expected invalid batch schema.');
+        } catch (ApiException $exception) {
+            $this->assertSame(201, $exception->httpStatusCode);
+            $this->assertSame(substr($body, 0, 65536), $exception->responseBody);
+            $this->assertTrue($exception->responseBodyTruncated);
+        }
+    }
+
+    public function testInvalidBatchIdsNeverReachTransport(): void
+    {
+        foreach (['', '.', '..'] as $id) {
+            $mock = $this->createMock(ClientInterface::class);
+            $mock->expects($this->never())->method('sendRequest');
+            $batches = $this->createBatchesResource($mock);
+            try {
+                $batches->get($id);
+                $this->fail('Expected invalid ID.');
+            } catch (\InvalidArgumentException) {
+                $this->assertTrue(true);
+            }
+            try {
+                $batches->downloadZip($id);
+                $this->fail('Expected invalid ID.');
+            } catch (\InvalidArgumentException) {
+                $this->assertTrue(true);
+            }
+        }
+    }
+
     public function testDownloadZip(): void
     {
         $zipBinary = 'PK-fake-zip-content';

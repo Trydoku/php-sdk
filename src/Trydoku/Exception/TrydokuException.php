@@ -19,6 +19,8 @@ abstract class TrydokuException extends \RuntimeException
         ?\Throwable $previous = null,
         public readonly ?int $httpStatusCode = null,
         public readonly ?string $responseBody = null,
+        public readonly ?string $errorCode = null,
+        public readonly bool $responseBodyTruncated = false,
     ) {
         parent::__construct($message, $code, $previous);
     }

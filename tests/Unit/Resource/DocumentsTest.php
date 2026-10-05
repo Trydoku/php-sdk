@@ -11,6 +11,7 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
 use Trydoku\Config;
 use Trydoku\DTO\Batch;
+use Trydoku\DTO\GenerateRequest;
 use Trydoku\HttpClient\AuthenticatedClient;
 use Trydoku\Resource\Documents;
 
@@ -153,6 +154,30 @@ final class DocumentsTest extends TestCase
         $this->expectExceptionMessage('Provide either a template UUID or a Base64 template.');
 
         $documents->generate(data: [['Name' => 'Test']]);
+    }
+
+    public function testGenerateRejectsOutOfRangeRowsBeforeTransport(): void
+    {
+        foreach ([[], array_fill(0, 501, ['Name' => 'Test'])] as $rows) {
+            $http = $this->createMock(ClientInterface::class);
+            $http->expects($this->never())->method('sendRequest');
+            $factory = new HttpFactory();
+            $documents = new Documents(new AuthenticatedClient($http, $factory, $factory, new Config('test-token')));
+            try {
+                $documents->generate(templateUuid: 'uuid', data: $rows);
+                $this->fail('Expected invalid row count.');
+            } catch (\InvalidArgumentException) {
+                $this->assertTrue(true);
+            }
+
+            $request = GenerateRequest::create()->withTemplateBase64('encoded')->withData($rows);
+            try {
+                $documents->generateFromRequest($request);
+                $this->fail('Expected invalid row count.');
+            } catch (\InvalidArgumentException) {
+                $this->assertTrue(true);
+            }
+        }
     }
 
     public function testWhitespaceOnlyTemplateIsTreatedAsMissing(): void

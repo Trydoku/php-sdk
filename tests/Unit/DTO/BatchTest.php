@@ -70,6 +70,34 @@ final class BatchTest extends TestCase
         $this->assertCount(0, $batch->items);
     }
 
+    public function testItemsMustBeAListWhenPresent(): void
+    {
+        foreach (['broken', 42, false, null, ['named' => []], [2 => []]] as $items) {
+            $data = $this->sampleBatchArray();
+            $data['items'] = $items;
+            try {
+                Batch::fromArray($data);
+                $this->fail('Invalid items payload was accepted.');
+            } catch (\InvalidArgumentException) {
+                $this->assertTrue(true);
+            }
+        }
+    }
+
+    public function testTimestampParserRejectsRelativeAndInvalidCalendarValues(): void
+    {
+        foreach (['2026-02-31T00:00:00Z', 'tomorrow', '2026-10-04T12:00:00', '2026-01-01T24:00:00Z'] as $timestamp) {
+            $data = $this->sampleBatchArray();
+            $data['created_at'] = $timestamp;
+            try {
+                Batch::fromArray($data);
+                $this->fail('Invalid timestamp was accepted.');
+            } catch (\InvalidArgumentException) {
+                $this->assertTrue(true);
+            }
+        }
+    }
+
     public function testFromArrayWithNullTimestamps(): void
     {
         $data = $this->sampleBatchArray();

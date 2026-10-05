@@ -13,6 +13,7 @@ use Trydoku\Config;
 use Trydoku\Exception\ApiException;
 use Trydoku\Exception\AuthenticationException;
 use Trydoku\Exception\AuthorizationException;
+use Trydoku\Exception\BatchFilesMissingException;
 use Trydoku\Exception\BatchNotReadyException;
 use Trydoku\Exception\ConflictException;
 use Trydoku\Exception\GenerationSetupFailedException;
@@ -313,6 +314,32 @@ final class AuthenticatedClientTest extends TestCase
         $this->expectExceptionMessage('This Idempotency-Key is already in progress.');
 
         $client->request('POST', '/generate', ['data' => []]);
+    }
+
+    public function test409BatchFilesMissingHasDistinctExceptionAndErrorCode(): void
+    {
+        $body = '{"error":{"code":"BATCH_FILES_MISSING","message":"Files missing"}}';
+        $client = $this->createClient($this->mockHttpClient(new Response(409, [], $body)));
+        try {
+            $client->request('GET', '/batches/b1/zip');
+            $this->fail('Expected missing files exception.');
+        } catch (BatchFilesMissingException $exception) {
+            $this->assertSame(409, $exception->httpStatusCode);
+            $this->assertSame($body, $exception->responseBody);
+            $this->assertSame('BATCH_FILES_MISSING', $exception->errorCode);
+        }
+    }
+
+    public function testUnknown409IsGenericAndKeepsStringErrorCode(): void
+    {
+        $client = $this->createClient($this->mockHttpClient(new Response(409, [], '{"error":{"code":"OTHER"}}')));
+        try {
+            $client->request('GET', '/batches/b1');
+            $this->fail('Expected generic API exception.');
+        } catch (ApiException $exception) {
+            $this->assertNotInstanceOf(ConflictException::class, $exception);
+            $this->assertSame('OTHER', $exception->errorCode);
+        }
     }
 
     public function test415ThrowsUnsupportedMediaTypeException(): void
