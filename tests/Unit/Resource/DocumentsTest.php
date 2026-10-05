@@ -11,6 +11,7 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
 use Trydoku\Config;
 use Trydoku\DTO\Batch;
+use Trydoku\DTO\GenerateRequest;
 use Trydoku\HttpClient\AuthenticatedClient;
 use Trydoku\Resource\Documents;
 
@@ -34,7 +35,7 @@ final class DocumentsTest extends TestCase
 
     public function testGenerateWithTemplateUuid(): void
     {
-        $responseBody = json_encode([
+        $responseBody = $this->encodeJson([
             'data' => [
                 'id' => 'batch-abc',
                 'status' => 'processing',
@@ -69,7 +70,7 @@ final class DocumentsTest extends TestCase
 
     public function testGenerateWithBase64Template(): void
     {
-        $responseBody = json_encode([
+        $responseBody = $this->encodeJson([
             'data' => [
                 'id' => 'batch-xyz',
                 'status' => 'processing',
@@ -96,7 +97,7 @@ final class DocumentsTest extends TestCase
 
     public function testGenerateWithVariableMapping(): void
     {
-        $responseBody = json_encode([
+        $responseBody = $this->encodeJson([
             'data' => [
                 'id' => 'batch-map',
                 'status' => 'processing',
@@ -155,6 +156,28 @@ final class DocumentsTest extends TestCase
         $documents->generate(data: [['Name' => 'Test']]);
     }
 
+    public function testGenerateRejectsOutOfRangeRowsBeforeTransport(): void
+    {
+        foreach ([[], array_fill(0, 501, ['Name' => 'Test'])] as $rows) {
+            $http = $this->createMock(ClientInterface::class);
+            $http->expects($this->never())->method('sendRequest');
+            $factory = new HttpFactory();
+            $documents = new Documents(new AuthenticatedClient($http, $factory, $factory, new Config('test-token')));
+            try {
+                $documents->generate(templateUuid: 'uuid', data: $rows);
+                $this->fail('Expected invalid row count.');
+            } catch (\InvalidArgumentException) {
+            }
+
+            $request = GenerateRequest::create()->withTemplateBase64('encoded')->withData($rows);
+            try {
+                $documents->generateFromRequest($request);
+                $this->fail('Expected invalid row count.');
+            } catch (\InvalidArgumentException) {
+            }
+        }
+    }
+
     public function testWhitespaceOnlyTemplateIsTreatedAsMissing(): void
     {
         $httpClient = $this->createMock(ClientInterface::class);
@@ -174,7 +197,7 @@ final class DocumentsTest extends TestCase
 
     public function testIdempotencyKeyIsSentAsHeader(): void
     {
-        $responseBody = json_encode([
+        $responseBody = $this->encodeJson([
             'data' => [
                 'id' => 'batch-idemp',
                 'status' => 'processing',
@@ -238,7 +261,7 @@ final class DocumentsTest extends TestCase
 
     public function testSetupPendingResponseIsExposedOnBatch(): void
     {
-        $responseBody = json_encode([
+        $responseBody = $this->encodeJson([
             'data' => [
                 'id' => 'batch-pending',
                 'status' => 'processing',
@@ -274,4 +297,8 @@ final class DocumentsTest extends TestCase
         $documents->generate(templateUuid: 'uuid', data: [['Name' => 'Test']]);
     }
 
+    private function encodeJson(mixed $value): string
+    {
+        return json_encode($value, JSON_THROW_ON_ERROR);
+    }
 }

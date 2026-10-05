@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Trydoku\Tests\Unit;
 
+use GuzzleHttp\Psr7\HttpFactory;
+use Http\Discovery\ClassDiscovery;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Client\ClientInterface;
 use Trydoku\Client;
@@ -30,6 +32,19 @@ final class ClientTest extends TestCase
         $client = new Client($config, httpClient: $httpClient);
 
         $this->assertInstanceOf(Client::class, $client);
+    }
+
+    public function testExplicitDependenciesWorkWhenDiscoveryIsDisabled(): void
+    {
+        $strategies = iterator_to_array(ClassDiscovery::getStrategies());
+        ClassDiscovery::setStrategies([]);
+        try {
+            $factory = new HttpFactory();
+            $client = new Client('fake-token', $this->createMock(ClientInterface::class), $factory, $factory);
+            $this->assertInstanceOf(Client::class, $client);
+        } finally {
+            ClassDiscovery::setStrategies($strategies);
+        }
     }
 
     public function testDocumentsReturnsSameInstance(): void

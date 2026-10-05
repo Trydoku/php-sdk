@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Trydoku\DTO;
 
 use Trydoku\Exception\ApiException;
+use Trydoku\HttpClient\ResponseContext;
 
 /**
  * A document generation batch returned by the API.
@@ -36,7 +37,7 @@ final class Batch
      *
      * @throws ApiException If the envelope is missing or the batch payload is invalid
      */
-    public static function fromApiResponse(array $response): self
+    public static function fromApiResponse(array $response, ?ResponseContext $context = null): self
     {
         try {
             $data = $response['data'] ?? null;
@@ -46,6 +47,10 @@ final class Batch
 
             $code = $response['code'] ?? null;
 
+            if ($context?->itemsIsJsonObject) {
+                throw new \InvalidArgumentException('The batch payload has an invalid "items" list.');
+            }
+
             return self::fromArray($data, is_string($code) ? $code : null);
         } catch (\InvalidArgumentException $exception) {
             $encoded = json_encode($response);
@@ -53,8 +58,9 @@ final class Batch
             throw new ApiException(
                 message: $exception->getMessage(),
                 previous: $exception,
-                httpStatusCode: null,
-                responseBody: is_string($encoded) ? $encoded : null,
+                httpStatusCode: $context?->httpStatusCode,
+                responseBody: $context->responseBody ?? (is_string($encoded) ? $encoded : null),
+                responseBodyTruncated: $context->responseBodyTruncated ?? false,
             );
         }
     }
@@ -62,12 +68,16 @@ final class Batch
     /**
      * @param array<string, mixed> $data
      *
-     * @throws \InvalidArgumentException If a required field is missing or the wrong type
+     * @throws \InvalidArgumentException If a required field is missing or the wrong type. Timestamps must use
+     *                                   YYYY-MM-DDTHH:MM:SS with optional 1–6 fractional digits and a timezone.
      */
     public static function fromArray(array $data, ?string $code = null): self
     {
         $items = [];
-        if (isset($data['items']) && is_array($data['items'])) {
+        if (array_key_exists('items', $data)) {
+            if (!is_array($data['items']) || !array_is_list($data['items'])) {
+                throw new \InvalidArgumentException('The batch payload has an invalid "items" list.');
+            }
             foreach ($data['items'] as $index => $item) {
                 if (!is_array($item)) {
                     throw new \InvalidArgumentException("The batch payload has an invalid items[{$index}] entry.");
@@ -165,7 +175,7 @@ final class Batch
     private static function requireInt(array $data, string $key): int
     {
         $value = $data[$key] ?? null;
-        if (!is_numeric($value) || is_bool($value)) {
+        if (!is_numeric($value)) {
             throw new \InvalidArgumentException("The batch payload is missing a valid \"{$key}\" field.");
         }
 
@@ -182,10 +192,22 @@ final class Batch
             throw new \InvalidArgumentException("The batch payload has an invalid \"{$key}\" field.");
         }
 
-        try {
-            return new \DateTimeImmutable($value);
-        } catch (\Exception $exception) {
-            throw new \InvalidArgumentException("The batch payload has an invalid \"{$key}\" field.", 0, $exception);
+        $pattern = '/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/D';
+        if (
+            preg_match($pattern, $value, $matches) !== 1
+            || ((int) substr($matches[4], 1, 2) === 14 && substr($matches[4], 4, 2) !== '00')
+        ) {
+            throw new \InvalidArgumentException("The batch payload has an invalid \"{$key}\" field.");
         }
+
+        $fraction = str_pad($matches[3], 6, '0');
+        $zone = $matches[4] === 'Z' ? '+00:00' : $matches[4];
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i:s.uP', $matches[1] . 'T' . $matches[2] . '.' . $fraction . $zone);
+        $errors = \DateTimeImmutable::getLastErrors();
+        if ($date === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
+            throw new \InvalidArgumentException("The batch payload has an invalid \"{$key}\" field.");
+        }
+
+        return $date;
     }
 }

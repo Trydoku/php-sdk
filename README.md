@@ -59,7 +59,22 @@ composer require guzzlehttp/guzzle guzzlehttp/psr7
 composer require symfony/http-client nyholm/psr7
 ```
 
-If Composer asks to allow the `php-http/discovery` plugin, accept it. The SDK uses that plugin to find the HTTP client you installed.
+The SDK uses runtime discovery to find installed PSR-18 and PSR-17 implementations. The `php-http/discovery` Composer plugin is optional; it can help Composer auto-install and pin implementations. You can also install implementations manually or provide all three dependencies directly:
+
+```php
+require 'vendor/autoload.php';
+
+$httpClient = new GuzzleHttp\Client();
+$factory = new GuzzleHttp\Psr7\HttpFactory();
+$client = new Trydoku\Client(
+    'fake-token',
+    httpClient: $httpClient,
+    requestFactory: $factory,
+    streamFactory: $factory,
+);
+```
+
+Constructing the client does not make an HTTP request. Explicit dependency injection also works when runtime discovery strategies are disabled.
 
 ## Get an API token
 
@@ -151,7 +166,7 @@ $batch = $client->documents()->generate(
 );
 ```
 
-Pass either `templateUuid` or `templateBase64`, never both, and never neither. A batch accepts 1–500 rows. The SDK throws `InvalidArgumentException` before it sends the request if those rules are broken.
+Pass either `templateUuid` or `templateBase64`, never both, and never neither. A batch accepts 1–500 rows. The SDK checks the source, idempotency key, and row count before sending; DOCX validity and the remaining payload schema are checked by the API.
 
 ### Generate from a local `.docx` file
 
@@ -216,6 +231,7 @@ $batch = $client->documents()->generateFromRequest($request);
 ```
 
 Setting `withTemplateUuid()` clears a previously set Base64 template, and the other way around.
+Values passed to `withData()`, `withVariables()`, and `withVariableMapping()` are snapshotted when set. Request data may contain nulls, scalars, and nested arrays (up to 128 levels); objects and resources are rejected with `InvalidArgumentException`.
 
 ### Idempotency
 
@@ -244,7 +260,7 @@ $batch = $client->documents()->generateFromRequest($request);
 
 The key must be 1–255 characters of `A–Z`, `a–z`, `0–9`, `.`, `_`, or `-`. Empty or whitespace-only values are omitted.
 
-If a request with that key is still running, the API returns HTTP 409 (`ConflictException`). Retry the **same** key — a new key after 409 can duplicate work. If the key is reused with a different body, the API returns HTTP 422 (`IdempotencyKeyConflictException`).
+If a request with that key is still running, the API returns HTTP 409 (`ConflictException`). Retry the **same** key — a new key after this specific 409 can duplicate work. A 409 `BATCH_FILES_MISSING` response is a `BatchFilesMissingException` and does not indicate an in-progress idempotency reservation. Unknown 409 responses are generic `ApiException`s. If the key is reused with a different body, the API returns HTTP 422 (`IdempotencyKeyConflictException`).
 
 ### Check batch status
 
@@ -351,6 +367,7 @@ try {
 | `AuthorizationException` | 403 | Token lacks permission |
 | `BatchNotReadyException` | 400 | ZIP requested before the batch completed |
 | `ConflictException` | 409 | Idempotency-Key is already in progress — retry the same key |
+| `BatchFilesMissingException` | 409 | Batch files are unavailable |
 | `PayloadTooLargeException` | 413 | Request body larger than 20 MiB |
 | `UnsupportedMediaTypeException` | 415 | `Content-Encoding` is set and is not `identity` |
 | `ValidationException` | 422 | Invalid payload or template schema mismatch |

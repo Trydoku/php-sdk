@@ -83,6 +83,51 @@ final class GenerateRequestTest extends TestCase
         $this->assertSame('uuid-2', $modified->toArray()['template_uuid']);
     }
 
+    public function testDataIsSnapshottedAndExportCanBeMutatedSafely(): void
+    {
+        $name = 'Before';
+        $row = ['nested' => ['Name' => &$name]];
+        $original = GenerateRequest::create()->withData([$row]);
+        $next = $original->withData([['Other' => 'value']]);
+        $name = 'After';
+        $export = $original->toArray();
+        $export['data'][0]['nested']['Name'] = 'Export mutation';
+
+        $this->assertSame('Before', $original->toArray()['data'][0]['nested']['Name']);
+        $this->assertSame([['Other' => 'value']], $next->toArray()['data']);
+    }
+
+    public function testRequestRejectsObjectsResourcesAndExcessiveDepth(): void
+    {
+        foreach ([new \stdClass(), new \DateTimeImmutable()] as $object) {
+            try {
+                GenerateRequest::create()->withData([['value' => $object]]);
+                $this->fail('Expected object to be rejected.');
+            } catch (\InvalidArgumentException) {
+            }
+        }
+
+        $resource = fopen('php://memory', 'r');
+        if (!is_resource($resource)) {
+            self::fail('Could not open an in-memory stream.');
+        }
+
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            GenerateRequest::create()->withData([['value' => $resource]]);
+        } finally {
+            fclose($resource);
+        }
+    }
+
+    public function testRequestRejectsCyclicAndTooDeepArrays(): void
+    {
+        $cycle = [];
+        $cycle['self'] = &$cycle;
+        $this->expectException(\InvalidArgumentException::class);
+        GenerateRequest::create()->withData([$cycle]);
+    }
+
     public function testIdempotencyKeyIsNotPartOfPayload(): void
     {
         $request = GenerateRequest::create()

@@ -13,6 +13,7 @@ use Trydoku\Config;
 use Trydoku\Exception\ApiException;
 use Trydoku\Exception\AuthenticationException;
 use Trydoku\Exception\AuthorizationException;
+use Trydoku\Exception\BatchFilesMissingException;
 use Trydoku\Exception\BatchNotReadyException;
 use Trydoku\Exception\ConflictException;
 use Trydoku\Exception\GenerationSetupFailedException;
@@ -47,7 +48,7 @@ final class AuthenticatedClientTest extends TestCase
 
     public function testSuccessfulJsonRequest(): void
     {
-        $body = json_encode(['data' => ['id' => 'batch-123']]);
+        $body = $this->encodeJson(['data' => ['id' => 'batch-123']]);
         $client = $this->createClient($this->mockHttpClient(new Response(200, [], $body)));
 
         $result = $client->request('GET', '/batches/batch-123');
@@ -81,7 +82,7 @@ final class AuthenticatedClientTest extends TestCase
                 return $request->getHeaderLine('Content-Type') === 'application/json'
                     && $body['template_uuid'] === 'test-uuid';
             }))
-            ->willReturn(new Response(201, [], json_encode(['data' => ['id' => 'b1']])));
+            ->willReturn(new Response(201, [], $this->encodeJson(['data' => ['id' => 'b1']])));
 
         $client = $this->createClient($mockHttp);
         $client->request('POST', '/generate', ['template_uuid' => 'test-uuid', 'data' => []]);
@@ -99,7 +100,7 @@ final class AuthenticatedClientTest extends TestCase
 
     public function test401ThrowsAuthenticationException(): void
     {
-        $body = json_encode(['message' => 'Unauthenticated.']);
+        $body = $this->encodeJson(['message' => 'Unauthenticated.']);
         $client = $this->createClient($this->mockHttpClient(new Response(401, [], $body)));
 
         $this->expectException(AuthenticationException::class);
@@ -110,7 +111,7 @@ final class AuthenticatedClientTest extends TestCase
 
     public function test402ThrowsInsufficientCreditsException(): void
     {
-        $body = json_encode([
+        $body = $this->encodeJson([
             'message' => 'Not enough credits.',
             'credits_available' => 5,
             'credits_required' => 10,
@@ -129,7 +130,7 @@ final class AuthenticatedClientTest extends TestCase
 
     public function test403ThrowsAuthorizationException(): void
     {
-        $body = json_encode(['message' => 'Forbidden.']);
+        $body = $this->encodeJson(['message' => 'Forbidden.']);
         $client = $this->createClient($this->mockHttpClient(new Response(403, [], $body)));
 
         $this->expectException(AuthorizationException::class);
@@ -139,7 +140,7 @@ final class AuthenticatedClientTest extends TestCase
 
     public function test413ThrowsPayloadTooLargeException(): void
     {
-        $body = json_encode(['message' => 'Too large.', 'error' => ['code' => 'PAYLOAD_TOO_LARGE', 'message' => 'Too large.', 'details' => []]]);
+        $body = $this->encodeJson(['message' => 'Too large.', 'error' => ['code' => 'PAYLOAD_TOO_LARGE', 'message' => 'Too large.', 'details' => []]]);
         $client = $this->createClient($this->mockHttpClient(new Response(413, [], $body)));
 
         $this->expectException(PayloadTooLargeException::class);
@@ -149,7 +150,7 @@ final class AuthenticatedClientTest extends TestCase
 
     public function test422ThrowsValidationException(): void
     {
-        $body = json_encode([
+        $body = $this->encodeJson([
             'message' => 'The given data was invalid.',
             'errors' => [
                 'template_uuid' => ['The template uuid field is required.'],
@@ -171,7 +172,7 @@ final class AuthenticatedClientTest extends TestCase
 
     public function test400BatchNotReadyThrows(): void
     {
-        $body = json_encode([
+        $body = $this->encodeJson([
             'error' => ['code' => 'BATCH_NOT_READY', 'message' => 'Batch processing is not complete.', 'details' => ''],
             'message' => 'Batch processing is not complete.',
         ]);
@@ -184,7 +185,7 @@ final class AuthenticatedClientTest extends TestCase
 
     public function test400GenericThrowsApiException(): void
     {
-        $body = json_encode(['message' => 'Some other bad request.']);
+        $body = $this->encodeJson(['message' => 'Some other bad request.']);
         $client = $this->createClient($this->mockHttpClient(new Response(400, [], $body)));
 
         $this->expectException(ApiException::class);
@@ -194,7 +195,7 @@ final class AuthenticatedClientTest extends TestCase
 
     public function test503GenerationSetupFailedThrows(): void
     {
-        $body = json_encode([
+        $body = $this->encodeJson([
             'error' => [
                 'code' => 'GENERATION_SETUP_FAILED',
                 'message' => 'Document generation setup failed and credits have been refunded.',
@@ -209,7 +210,7 @@ final class AuthenticatedClientTest extends TestCase
 
     public function test503GenericThrowsApiException(): void
     {
-        $body = json_encode(['message' => 'Service temporarily unavailable.']);
+        $body = $this->encodeJson(['message' => 'Service temporarily unavailable.']);
         $client = $this->createClient($this->mockHttpClient(new Response(503, [], $body)));
 
         $this->expectException(ApiException::class);
@@ -303,7 +304,7 @@ final class AuthenticatedClientTest extends TestCase
 
     public function test409ThrowsConflictException(): void
     {
-        $body = json_encode([
+        $body = $this->encodeJson([
             'error' => ['code' => 'IDEMPOTENCY_IN_PROGRESS', 'message' => 'This Idempotency-Key is already in progress.'],
             'message' => 'This Idempotency-Key is already in progress.',
         ]);
@@ -315,9 +316,35 @@ final class AuthenticatedClientTest extends TestCase
         $client->request('POST', '/generate', ['data' => []]);
     }
 
+    public function test409BatchFilesMissingHasDistinctExceptionAndErrorCode(): void
+    {
+        $body = '{"error":{"code":"BATCH_FILES_MISSING","message":"Files missing"}}';
+        $client = $this->createClient($this->mockHttpClient(new Response(409, [], $body)));
+        try {
+            $client->request('GET', '/batches/b1/zip');
+            $this->fail('Expected missing files exception.');
+        } catch (BatchFilesMissingException $exception) {
+            $this->assertSame(409, $exception->httpStatusCode);
+            $this->assertSame($body, $exception->responseBody);
+            $this->assertSame('BATCH_FILES_MISSING', $exception->errorCode);
+        }
+    }
+
+    public function testUnknown409IsGenericAndKeepsStringErrorCode(): void
+    {
+        $client = $this->createClient($this->mockHttpClient(new Response(409, [], '{"error":{"code":"OTHER"}}')));
+        try {
+            $client->request('GET', '/batches/b1');
+            $this->fail('Expected generic API exception.');
+        } catch (ApiException $exception) {
+            $this->assertSame(ApiException::class, $exception::class);
+            $this->assertSame('OTHER', $exception->errorCode);
+        }
+    }
+
     public function test415ThrowsUnsupportedMediaTypeException(): void
     {
-        $body = json_encode([
+        $body = $this->encodeJson([
             'error' => ['code' => 'UNSUPPORTED_CONTENT_ENCODING', 'message' => 'Content-Encoding must be identity.'],
             'message' => 'Content-Encoding must be identity.',
         ]);
@@ -330,7 +357,7 @@ final class AuthenticatedClientTest extends TestCase
 
     public function test422IdempotencyKeyConflictThrowsDedicatedException(): void
     {
-        $body = json_encode([
+        $body = $this->encodeJson([
             'error' => [
                 'code' => 'IDEMPOTENCY_KEY_CONFLICT',
                 'message' => 'This Idempotency-Key was reused with a different body.',
@@ -345,4 +372,8 @@ final class AuthenticatedClientTest extends TestCase
         $client->request('POST', '/generate', ['data' => []]);
     }
 
+    private function encodeJson(mixed $value): string
+    {
+        return json_encode($value, JSON_THROW_ON_ERROR);
+    }
 }

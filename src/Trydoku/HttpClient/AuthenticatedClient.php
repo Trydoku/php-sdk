@@ -12,6 +12,7 @@ use Trydoku\Config;
 use Trydoku\Exception\ApiException;
 use Trydoku\Exception\AuthenticationException;
 use Trydoku\Exception\AuthorizationException;
+use Trydoku\Exception\BatchFilesMissingException;
 use Trydoku\Exception\BatchNotReadyException;
 use Trydoku\Exception\ConflictException;
 use Trydoku\Exception\GenerationSetupFailedException;
@@ -29,6 +30,7 @@ use Trydoku\Exception\ValidationException;
  */
 final class AuthenticatedClient
 {
+    private const MAX_DIAGNOSTIC_BODY_BYTES = 65536;
     public function __construct(
         private readonly ClientInterface $httpClient,
         private readonly RequestFactoryInterface $requestFactory,
@@ -50,6 +52,15 @@ final class AuthenticatedClient
      * @throws \Psr\Http\Client\ClientExceptionInterface On transport failure
      */
     public function request(string $method, string $uri, ?array $body = null, array $headers = []): array
+    {
+        return $this->requestWithContext($method, $uri, $body, $headers)->data;
+    }
+
+    /**
+     * @param array<string, mixed>|null $body
+     * @param array<string, string> $headers
+     */
+    public function requestWithContext(string $method, string $uri, ?array $body = null, array $headers = []): ResponseContext
     {
         $response = $this->sendRequest($method, $uri, $body, $headers);
         $responseBody = (string) $response->getBody();
@@ -75,7 +86,14 @@ final class AuthenticatedClient
             );
         }
 
-        return $decoded;
+        $shape = json_decode($responseBody);
+        $itemsIsObject = isset($shape->data) && is_object($shape->data)
+            && property_exists($shape->data, 'items') && is_object($shape->data->items);
+
+        $truncated = strlen($responseBody) > self::MAX_DIAGNOSTIC_BODY_BYTES;
+        $diagnosticBody = $truncated ? substr($responseBody, 0, self::MAX_DIAGNOSTIC_BODY_BYTES) : $responseBody;
+
+        return new ResponseContext($decoded, $response->getStatusCode(), $diagnosticBody, $itemsIsObject, $truncated);
     }
 
     /**
@@ -153,6 +171,7 @@ final class AuthenticatedClient
                 responseBody: $responseBody,
                 creditsAvailable: is_numeric($decoded['credits_available'] ?? null) ? (float) $decoded['credits_available'] : null,
                 creditsRequired: is_numeric($decoded['credits_required'] ?? null) ? (float) $decoded['credits_required'] : null,
+                errorCode: is_string($error['code'] ?? null) ? $error['code'] : null,
             );
         }
 
@@ -177,13 +196,23 @@ final class AuthenticatedClient
                 httpStatusCode: $statusCode,
                 responseBody: $responseBody,
                 errors: $errors,
+                errorCode: is_string($error['code'] ?? null) ? $error['code'] : null,
             );
         }
 
+        if ($statusCode === 409 && ($error['code'] ?? null) === 'BATCH_FILES_MISSING') {
+            throw new BatchFilesMissingException($message, httpStatusCode: $statusCode, responseBody: $responseBody, errorCode: 'BATCH_FILES_MISSING');
+        }
+
+        if ($statusCode === 409 && ($error['code'] ?? null) === 'IDEMPOTENCY_IN_PROGRESS') {
+            throw new ConflictException($message, httpStatusCode: $statusCode, responseBody: $responseBody, errorCode: 'IDEMPOTENCY_IN_PROGRESS');
+        }
+
+        $serverErrorCode = is_string($error['code'] ?? null) ? $error['code'] : null;
         $exceptionClass = match ($statusCode) {
             401 => AuthenticationException::class,
             403 => AuthorizationException::class,
-            409 => ConflictException::class,
+            409 => ApiException::class,
             413 => PayloadTooLargeException::class,
             415 => UnsupportedMediaTypeException::class,
             400 => ($error['code'] ?? null) === 'BATCH_NOT_READY' ? BatchNotReadyException::class : ApiException::class,
@@ -195,6 +224,7 @@ final class AuthenticatedClient
             message: $message,
             httpStatusCode: $statusCode,
             responseBody: $responseBody,
+            errorCode: $serverErrorCode,
         );
     }
 }

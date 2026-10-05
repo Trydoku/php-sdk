@@ -33,7 +33,7 @@ final class Documents
      * @param string|null $format Output format. Currently `"zip"`.
      * @param string|null $idempotencyKey Optional `Idempotency-Key` header (1–255 of `A-Z a-z 0-9 . _ -`)
      *
-     * @throws \InvalidArgumentException If no template source, both sources, or an invalid idempotency key is given
+     * @throws \InvalidArgumentException If no template source, both sources, invalid idempotency key, or row count outside 1–500 is given
      * @throws \Trydoku\Exception\TrydokuException If the API rejects the request
      */
     public function generate(
@@ -84,7 +84,7 @@ final class Documents
     /**
      * Start a new document generation batch from a GenerateRequest object.
      *
-     * @throws \InvalidArgumentException If the request has no template source
+     * @throws \InvalidArgumentException If the request has no template source or row count outside 1–500
      * @throws \Trydoku\Exception\TrydokuException If the API rejects the request
      */
     public function generateFromRequest(GenerateRequest $request): Batch
@@ -93,15 +93,21 @@ final class Documents
             throw new \InvalidArgumentException('Provide either a template UUID or a Base64 template.');
         }
 
+        $payload = $request->toArray();
+        $rowCount = count($payload['data']);
+        if ($rowCount < 1 || $rowCount > 500) {
+            throw new \InvalidArgumentException('Generation requests must contain between 1 and 500 data rows.');
+        }
+
         $headers = [];
         $idempotencyKey = $request->idempotencyKey();
         if ($idempotencyKey !== null) {
             $headers['Idempotency-Key'] = $idempotencyKey;
         }
 
-        $response = $this->client->request('POST', '/generate', $request->toArray(), $headers);
+        $context = $this->client->requestWithContext('POST', '/generate', $payload, $headers);
 
-        return Batch::fromApiResponse($response);
+        return Batch::fromApiResponse($context->data, $context);
     }
 
     private static function nonEmpty(?string $value): ?string

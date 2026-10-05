@@ -74,11 +74,12 @@ final class GenerateRequest
      * Set the placeholder values, one associative or indexed row per document.
      *
      * @param list<array<string|int, mixed>> $data
+     * @throws \InvalidArgumentException If a value is an object, resource, or exceeds 128 levels
      */
     public function withData(array $data): self
     {
         $clone = clone $this;
-        $clone->data = $data;
+        $clone->data = array_values(self::snapshot($data));
 
         return $clone;
     }
@@ -93,7 +94,7 @@ final class GenerateRequest
     public function withVariables(array $variables): self
     {
         $clone = clone $this;
-        $clone->variables = $variables;
+        $clone->variables = self::snapshot($variables);
 
         return $clone;
     }
@@ -106,7 +107,7 @@ final class GenerateRequest
     public function withVariableMapping(array $mapping): self
     {
         $clone = clone $this;
-        $clone->variableMapping = $mapping;
+        $clone->variableMapping = self::snapshot($mapping);
 
         return $clone;
     }
@@ -220,5 +221,28 @@ final class GenerateRequest
         }
 
         return $value;
+    }
+
+    /** @param array<array-key, mixed> $values
+     * @return array<array-key, mixed>
+     */
+    private static function snapshot(array $values, int $depth = 0): array
+    {
+        if ($depth > 128) {
+            throw new \InvalidArgumentException('Request values may not exceed 128 nested array levels.');
+        }
+
+        $copy = [];
+        foreach ($values as $key => $value) {
+            if (is_array($value)) {
+                $copy[$key] = self::snapshot($value, $depth + 1);
+            } elseif (is_object($value) || is_resource($value)) {
+                throw new \InvalidArgumentException('Request values may contain only null, scalars, and arrays.');
+            } else {
+                $copy[$key] = $value;
+            }
+        }
+
+        return $copy;
     }
 }

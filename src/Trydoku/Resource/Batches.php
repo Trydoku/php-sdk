@@ -25,13 +25,15 @@ final class Batches
      * Fetch the current status, counters, links, and items for a batch.
      *
      * @throws TrydokuException If the API returns an error
+     * @throws \InvalidArgumentException If the batch ID is empty or a dot path segment
      */
     public function get(string $batchId): Batch
     {
+        self::validateBatchId($batchId);
         $batchId = rawurlencode($batchId);
-        $response = $this->client->request('GET', "/batches/{$batchId}");
+        $context = $this->client->requestWithContext('GET', "/batches/{$batchId}");
 
-        return Batch::fromApiResponse($response);
+        return Batch::fromApiResponse($context->data, $context);
     }
 
     /**
@@ -42,12 +44,21 @@ final class Batches
      *
      * @throws \Trydoku\Exception\BatchNotReadyException If the batch is still processing
      * @throws TrydokuException If the API returns another error
+     * @throws \InvalidArgumentException If the batch ID is empty or a dot path segment
      */
     public function downloadZip(string $batchId): string
     {
+        self::validateBatchId($batchId);
         $batchId = rawurlencode($batchId);
 
         return $this->client->requestRaw('GET', "/batches/{$batchId}/zip");
+    }
+
+    private static function validateBatchId(string $batchId): void
+    {
+        if ($batchId === '' || $batchId === '.' || $batchId === '..') {
+            throw new \InvalidArgumentException('Batch ID must not be empty or a dot path segment.');
+        }
     }
 
     /**
