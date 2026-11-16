@@ -123,8 +123,16 @@ if (!$batch->isCompleted() || $batch->hasFailed()) {
     );
 }
 
-// 3. Download every completed document as a single ZIP
-file_put_contents('documents.zip', $client->batches()->downloadZip($batch->id));
+// 3. Stream every completed document into a ZIP file
+$destination = fopen('documents.zip', 'wb');
+if ($destination === false) {
+    throw new RuntimeException('Could not open documents.zip for writing.');
+}
+try {
+    $client->batches()->downloadZipTo($batch->id, $destination);
+} finally {
+    fclose($destination);
+}
 
 echo "Saved documents.zip ({$batch->processedItems}/{$batch->totalItems} rows)\n";
 ```
@@ -319,6 +327,27 @@ If the batch is still processing after the last attempt, `waitForCompletion()` t
 
 ### Download a ZIP
 
+For large archives, stream directly to a writable PHP stream so the SDK does
+not build the full ZIP as a PHP string. The underlying HTTP client may still
+buffer response data depending on its implementation:
+
+```php
+$destination = fopen('result.zip', 'wb');
+if ($destination === false) {
+    throw new RuntimeException('Could not open result.zip for writing.');
+}
+try {
+    $bytesWritten = $client->batches()->downloadZipTo($batch->id, $destination);
+} finally {
+    fclose($destination);
+}
+```
+
+`downloadZip()` remains available when you need the ZIP bytes as a string. It
+holds the complete archive in memory. Both methods require HTTP 200 and a
+recognized ZIP signature at the start of the response; this is a basic format
+check, not a full archive integrity check.
+
 ```php
 $zipContent = $client->batches()->downloadZip('a91b22e1-a714-4113-a83d-bc350284e300');
 file_put_contents('result.zip', $zipContent);
@@ -384,7 +413,7 @@ try {
 |--------|----------|------------|
 | `POST` | `/v1/generate` | `$client->documents()->generate(...)` |
 | `GET` | `/v1/batches/{id}` | `$client->batches()->get($id)` |
-| `GET` | `/v1/batches/{id}/zip` | `$client->batches()->downloadZip($id)` |
+| `GET` | `/v1/batches/{id}/zip` | `$client->batches()->downloadZip($id)` or `downloadZipTo($id, $stream)` |
 
 ## Development
 

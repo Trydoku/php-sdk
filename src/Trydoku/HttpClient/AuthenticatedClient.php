@@ -8,6 +8,7 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Message\StreamInterface;
 use Trydoku\Config;
 use Trydoku\Exception\ApiException;
 use Trydoku\Exception\AuthenticationException;
@@ -115,6 +116,23 @@ final class AuthenticatedClient
     }
 
     /**
+     * Send a raw request and retain the response stream for incremental reading.
+     *
+     * @throws \Trydoku\Exception\TrydokuException If the API returns an error
+     * @throws \Psr\Http\Client\ClientExceptionInterface On transport failure
+     */
+    public function requestRawResponse(string $method, string $uri): ResponseInterface
+    {
+        $response = $this->sendRequest($method, $uri);
+        if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+            [$responseBody, $truncated] = $this->readDiagnosticBody($response->getBody());
+            $this->throwOnError($response, $responseBody, $truncated);
+        }
+
+        return $response;
+    }
+
+    /**
      * @param array<string, mixed>|null $body
      * @param array<string, string> $headers
      */
@@ -142,7 +160,7 @@ final class AuthenticatedClient
         return $this->httpClient->sendRequest($request);
     }
 
-    private function throwOnError(ResponseInterface $response, string $responseBody): void
+    private function throwOnError(ResponseInterface $response, string $responseBody, bool $responseBodyTruncated = false): void
     {
         $statusCode = $response->getStatusCode();
 
@@ -169,6 +187,7 @@ final class AuthenticatedClient
                 message: $message,
                 httpStatusCode: $statusCode,
                 responseBody: $responseBody,
+                responseBodyTruncated: $responseBodyTruncated,
                 creditsAvailable: is_numeric($decoded['credits_available'] ?? null) ? (float) $decoded['credits_available'] : null,
                 creditsRequired: is_numeric($decoded['credits_required'] ?? null) ? (float) $decoded['credits_required'] : null,
                 errorCode: is_string($error['code'] ?? null) ? $error['code'] : null,
@@ -180,6 +199,7 @@ final class AuthenticatedClient
                 message: $message,
                 httpStatusCode: $statusCode,
                 responseBody: $responseBody,
+                responseBodyTruncated: $responseBodyTruncated,
             );
         }
 
@@ -197,15 +217,16 @@ final class AuthenticatedClient
                 responseBody: $responseBody,
                 errors: $errors,
                 errorCode: is_string($error['code'] ?? null) ? $error['code'] : null,
+                responseBodyTruncated: $responseBodyTruncated,
             );
         }
 
         if ($statusCode === 409 && ($error['code'] ?? null) === 'BATCH_FILES_MISSING') {
-            throw new BatchFilesMissingException($message, httpStatusCode: $statusCode, responseBody: $responseBody, errorCode: 'BATCH_FILES_MISSING');
+            throw new BatchFilesMissingException($message, httpStatusCode: $statusCode, responseBody: $responseBody, errorCode: 'BATCH_FILES_MISSING', responseBodyTruncated: $responseBodyTruncated);
         }
 
         if ($statusCode === 409 && ($error['code'] ?? null) === 'IDEMPOTENCY_IN_PROGRESS') {
-            throw new ConflictException($message, httpStatusCode: $statusCode, responseBody: $responseBody, errorCode: 'IDEMPOTENCY_IN_PROGRESS');
+            throw new ConflictException($message, httpStatusCode: $statusCode, responseBody: $responseBody, errorCode: 'IDEMPOTENCY_IN_PROGRESS', responseBodyTruncated: $responseBodyTruncated);
         }
 
         $serverErrorCode = is_string($error['code'] ?? null) ? $error['code'] : null;
@@ -225,6 +246,27 @@ final class AuthenticatedClient
             httpStatusCode: $statusCode,
             responseBody: $responseBody,
             errorCode: $serverErrorCode,
+            responseBodyTruncated: $responseBodyTruncated,
         );
+    }
+
+    /** @return array{string, bool} */
+    private function readDiagnosticBody(StreamInterface $body): array
+    {
+        $maximumLength = self::MAX_DIAGNOSTIC_BODY_BYTES + 1;
+        $contents = '';
+        while (strlen($contents) < $maximumLength && !$body->eof()) {
+            $chunk = $body->read($maximumLength - strlen($contents));
+            if ($chunk === '') {
+                break;
+            }
+            $contents .= $chunk;
+        }
+        $truncated = strlen($contents) > self::MAX_DIAGNOSTIC_BODY_BYTES || !$body->eof();
+
+        return [
+            $truncated ? substr($contents, 0, self::MAX_DIAGNOSTIC_BODY_BYTES) : $contents,
+            $truncated,
+        ];
     }
 }

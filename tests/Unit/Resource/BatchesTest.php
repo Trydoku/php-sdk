@@ -117,7 +117,7 @@ final class BatchesTest extends TestCase
 
     public function testDownloadZip(): void
     {
-        $zipBinary = 'PK-fake-zip-content';
+        $zipBinary = "PK\x03\x04fake-zip-content";
         $mockHttp = $this->createMock(ClientInterface::class);
         $mockHttp->method('sendRequest')
             ->willReturn(new Response(200, [], $zipBinary));
@@ -305,7 +305,10 @@ final class BatchesTest extends TestCase
 
                 return str_contains($request->getUri()->getPath(), '/batches/id%2Fpart%3Fquery%23fragment');
             }))
-            ->willReturn(new Response(200, [], $this->completedBatchJson()));
+            ->willReturnOnConsecutiveCalls(
+                new Response(200, [], $this->completedBatchJson()),
+                new Response(200, [], "PK\x03\x04fake-zip-content"),
+            );
         $batches = $this->createBatchesResource($mockHttp);
 
         $batches->get('id/part?query#fragment');

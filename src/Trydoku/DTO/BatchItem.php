@@ -25,8 +25,8 @@ final class BatchItem
     public static function fromArray(array $data): self
     {
         $rowIndex = $data['row_index'] ?? null;
-        if (!is_numeric($rowIndex)) {
-            throw new \InvalidArgumentException('The batch item is missing a valid "row_index" field.');
+        if (!is_int($rowIndex) || $rowIndex < 0) {
+            throw new \InvalidArgumentException('The batch item is missing a valid non-negative integer "row_index" field.');
         }
 
         $status = $data['status'] ?? null;
@@ -45,7 +45,7 @@ final class BatchItem
         }
 
         return new self(
-            rowIndex: (int) $rowIndex,
+            rowIndex: $rowIndex,
             status: $status,
             downloadUrl: $downloadUrl,
             error: $error,

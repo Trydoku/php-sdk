@@ -18,7 +18,8 @@ class InsufficientCreditsException extends TrydokuException
         public readonly ?float $creditsAvailable = null,
         public readonly ?float $creditsRequired = null,
         ?string $errorCode = null,
+        bool $responseBodyTruncated = false,
     ) {
-        parent::__construct($message, $code, $previous, $httpStatusCode, $responseBody, $errorCode);
+        parent::__construct($message, $code, $previous, $httpStatusCode, $responseBody, $errorCode, $responseBodyTruncated);
     }
 }

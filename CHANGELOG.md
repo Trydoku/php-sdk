@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Add `Batches::downloadZipTo()` to stream archive downloads to a writable PHP stream
+
+### Fixed
+- Reject successful ZIP download responses without a ZIP file signature and bound streamed error diagnostics
+- Reject negative and non-integer batch row indexes instead of coercing them
+
 ## [2.0.0] - 2026-10-05
 
 ### Added
